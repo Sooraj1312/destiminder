@@ -52,6 +52,18 @@ class VoiceService {
     }
   }
 
+  Future<void> announceCustom(String message) async {
+    if (!masterEnabled) return;
+    await initialize();
+    try {
+      _isSpeaking = true;
+      await _flutterTts.speak(message);
+    } catch (e) {
+      print('TTS Error: $e');
+      _isSpeaking = false;
+    }
+  }
+
   // Stop any ongoing announcement
   Future<void> stop() async {
     if (_isSpeaking) {
