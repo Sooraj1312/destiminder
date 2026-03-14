@@ -6,6 +6,7 @@ import 'services/destination_service.dart';
 import 'services/history_service.dart';
 import 'services/notification_service.dart';
 import 'services/background_monitor.dart'; 
+import 'services/todo_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,7 @@ class DestiMinderApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => DestinationService()),
         ChangeNotifierProvider(create: (_) => HistoryService()),
+        ChangeNotifierProvider(create: (_) => TodoService()),
       ],
       child: MaterialApp(
         title: 'DestiMinder',

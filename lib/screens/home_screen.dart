@@ -20,6 +20,8 @@ import '../widgets/destination_card.dart';
 import '../widgets/vibration_picker.dart';
 import 'history_screen.dart'; 
 import '../widgets/emoji_icons.dart';
+import '../widgets/todo_list.dart';
+import '../services/todo_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -186,9 +188,19 @@ class _HomeScreenState extends State<HomeScreen>
     // Voice announcement if enabled
     if (destination.voiceEnabled && VoiceService.masterEnabled) {
       await VoiceService().announceArrival(destination);
+      
+      // Also announce pending tasks if any
+      final todoService = Provider.of<TodoService>(context, listen: false);
+      final pendingTodos = todoService.getPendingTodos(destination.id);
+      if (pendingTodos.isNotEmpty) {
+        String taskMessage = 'You have ${pendingTodos.length} pending task';
+        if (pendingTodos.length > 1) taskMessage += 's';
+        taskMessage += ' at ${destination.displayName}';
+        await VoiceService().announceCustom(taskMessage);
+      }
     }
     
-    // Show arrival card in UI
+    // Show arrival card
     _buildArrivalCard(destination);
 
     Future.delayed(const Duration(seconds: 10), () {
@@ -198,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
     });
-    
   }
 
   Future<void> _checkBackgroundState() async {
@@ -229,6 +240,87 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
     });
+  }
+
+  void _showAddTodoDialog(Destination destination) {
+    final todoService = Provider.of<TodoService>(context, listen: false);
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Task for ${destination.displayName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: 'Task title',
+                hintText: 'e.g., Buy milk',
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty) {
+                todoService.addTodo(
+                  destination.id,
+                  titleController.text,
+                  description: descController.text.isNotEmpty 
+                      ? descController.text 
+                      : null,
+                );
+                Navigator.pop(context);
+                
+                // Show confirmation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Task added to ${destination.displayName}'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTodoList(Destination destination) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        padding: const EdgeInsets.all(16),
+        child: TodoList(
+          destination: destination,
+          onClose: () => Navigator.pop(context),
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleBackgroundMonitoring() async {
@@ -392,6 +484,77 @@ class _HomeScreenState extends State<HomeScreen>
                         
                         // Voice announcement toggle
                         _buildVoiceToggle(destination),
+                        const SizedBox(height: 16),
+
+                        // Todo section
+                        Consumer<TodoService>(
+                          builder: (context, todoService, child) {
+                            final pendingCount = todoService.getPendingTodos(destination.id).length;
+                            final totalCount = todoService.getTodosForDestination(destination.id).length;
+                            
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: pendingCount > 0 
+                                          ? Colors.orange.withOpacity(0.1)
+                                          : Colors.grey.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.checklist,
+                                      color: pendingCount > 0 ? Colors.orange : Colors.grey,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Tasks',
+                                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                                        ),
+                                        Text(
+                                          totalCount == 0
+                                              ? 'No tasks added'
+                                              : '$pendingCount of $totalCount pending',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 14,
+                                            color: pendingCount > 0 ? Colors.orange : Colors.grey[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _showAddTodoDialog(destination);
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.visibility),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _showTodoList(destination);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -1076,7 +1239,7 @@ class _HomeScreenState extends State<HomeScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (activeDestinations.isEmpty) ...[
-                          EmojiIcons.coordinates(color: Colors.white.withOpacity(0.2)),
+                          EmojiIcons.coordinates(size: 80, color: Colors.white.withOpacity(0.2)),
                           const SizedBox(height: 16),
                           const Text(
                             'No active destinations',
@@ -1258,57 +1421,98 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildArrivalCard(Destination destination) {
-    return Positioned(
-      top: 100,
-      left: 16,
-      right: 16,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.green,
+    return Consumer<TodoService>(
+      builder: (context, todoService, child) {
+        final pendingCount = todoService.getPendingTodos(destination.id).length;
+        
+        return Positioned(
+          top: 100,
+          left: 16,
+          right: 16,
+          child: Material(
+            elevation: 8,
             borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  EmojiIcons.emojiEmotions(color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Arrived at ${destination.displayName}!',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                  Row(
+                    children: [
+                      EmojiIcons.emojiEmotions(color: Colors.white),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Arrived at ${destination.displayName}!',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _arrivedDestinations.remove(destination.id);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    destination.address,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  
+                  // Todo section
+                  if (pendingCount > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.checklist, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$pendingCount pending task${pendingCount > 1 ? 's' : ''}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => _showTodoList(destination),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: Colors.white.withOpacity(0.2),
+                            ),
+                            child: const Text('View Tasks'),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: EmojiIcons.close(color: Colors.white),
-                    onPressed: () {
-                      setState(() {
-                        _arrivedDestinations.remove(destination.id);
-                      });
-                    },
-                  ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                destination.address,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
