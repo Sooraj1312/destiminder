@@ -1350,7 +1350,7 @@ class _HomeScreenState extends State<HomeScreen>
               : _buildInactiveHeroCard(),
         ),
 
-        // 2b. Map style switcher (same as adding page) + current location
+        // 2b. Map style switcher (same as adding page) + current location below
         Positioned(
           top: 150,
           right: 16,
@@ -1361,45 +1361,47 @@ class _HomeScreenState extends State<HomeScreen>
               _buildHomeTileButton(1, Icons.nightlight_round, 'Dark map'),
               const SizedBox(height: 8),
               _buildHomeTileButton(2, Icons.satellite_alt_rounded, 'Satellite map'),
-            ],
-          ),
-        ),
-        Positioned(
-          bottom: 168,
-          right: 16,
-          child: GestureDetector(
-            onTap: _goToCurrentLocationHome,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: _isLocatingHome
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+              const SizedBox(height: 8),
+              Tooltip(
+                message: 'Go to my location',
+                child: GestureDetector(
+                  onTap: _goToCurrentLocationHome,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withValues(alpha: 0.2),
                       ),
-                    )
-                  : Icon(
-                      Icons.my_location_rounded,
-                      color: theme.colorScheme.primary,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-            ),
+                    child: _isLocatingHome
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : Icon(
+                            Icons.my_location_rounded,
+                            size: 22,
+                            color: theme.colorScheme.primary,
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
