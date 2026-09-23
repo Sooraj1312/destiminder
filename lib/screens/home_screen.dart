@@ -48,6 +48,10 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isLocationUpdating = false;
   final Set<String> _arrivedDestinations = {};
   final Set<String> _visitedDestinations = {}; // Track if announced for this visit
+  // Home mini-map style: 0 = Light (OSM), 1 = Dark (OSM + invert), 2 = Satellite (Esri, free)
+  int _homeTileLayer = 0;
+  bool _isLocatingHome = false;
+  final MapController _homeMapController = MapController();
   
 
   @override
@@ -60,7 +64,8 @@ class _HomeScreenState extends State<HomeScreen>
     _initializeServices();
     _getCurrentLocation();
     _checkBackgroundState();
-    _loadSavedVoiceState(); 
+    _loadSavedVoiceState();
+    _loadHomeTile();
     
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -80,6 +85,38 @@ class _HomeScreenState extends State<HomeScreen>
         _masterVoiceEnabled = savedState;
         VoiceService.masterEnabled = savedState;
       });
+    }
+  }
+
+  Future<void> _loadHomeTile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt('home_tile_layer');
+    if (saved != null && saved >= 0 && saved <= 2 && mounted) {
+      setState(() => _homeTileLayer = saved);
+    }
+  }
+
+  Future<void> _setHomeTile(int index) async {
+    setState(() => _homeTileLayer = index);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('home_tile_layer', index);
+    await _vibration.vibrateSuccess();
+  }
+
+  Future<void> _goToCurrentLocationHome() async {
+    if (_isLocatingHome) return;
+    setState(() => _isLocatingHome = true);
+    try {
+      final position = await _locationService.getCurrentLocation();
+      if (position != null && mounted) {
+        setState(() => _currentPosition = position);
+        _homeMapController.move(
+          LatLng(position.latitude, position.longitude),
+          15.0,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLocatingHome = false);
     }
   }
 
@@ -1147,7 +1184,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildRealMapAndHeroSection(DestinationService destinationService) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final activeDestinations = destinationService.activeDestinations;
 
     // Default location (current location or fallback)
@@ -1178,6 +1214,7 @@ class _HomeScreenState extends State<HomeScreen>
         Positioned.fill(
           bottom: 110,
           child: FlutterMap(
+            mapController: _homeMapController,
             options: MapOptions(
               initialCenter: currentLatLng,
               initialZoom: activeDestinations.isNotEmpty ? 13.5 : 15.0,
@@ -1186,8 +1223,8 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
             children: [
-              // OSM tiles — dark mode uses ColorFilter invert (no API key needed)
-              if (isDark)
+              // Free tiles: 0 = Light OSM, 1 = Dark (OSM + invert), 2 = Satellite (Esri)
+              if (_homeTileLayer == 1)
                 ColorFiltered(
                   colorFilter: const ColorFilter.matrix([
                     -1,  0,  0, 0, 255,
@@ -1201,6 +1238,13 @@ class _HomeScreenState extends State<HomeScreen>
                     tileProvider: CachedTileProvider(),
                     userAgentPackageName: 'com.sooraj.destiminder',
                   ),
+                )
+              else if (_homeTileLayer == 2)
+                TileLayer(
+                  key: const ValueKey('home-satellite'),
+                  urlTemplate:
+                      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'com.sooraj.destiminder',
                 )
               else
                 TileLayer(
@@ -1306,6 +1350,59 @@ class _HomeScreenState extends State<HomeScreen>
               : _buildInactiveHeroCard(),
         ),
 
+        // 2b. Map style switcher (same as adding page) + current location
+        Positioned(
+          top: 150,
+          right: 16,
+          child: Column(
+            children: [
+              _buildHomeTileButton(0, Icons.wb_sunny_rounded, 'Light map'),
+              const SizedBox(height: 8),
+              _buildHomeTileButton(1, Icons.nightlight_round, 'Dark map'),
+              const SizedBox(height: 8),
+              _buildHomeTileButton(2, Icons.satellite_alt_rounded, 'Satellite map'),
+            ],
+          ),
+        ),
+        Positioned(
+          bottom: 168,
+          right: 16,
+          child: GestureDetector(
+            onTap: _goToCurrentLocationHome,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: _isLocatingHome
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Icon(
+                      Icons.my_location_rounded,
+                      color: theme.colorScheme.primary,
+                    ),
+            ),
+          ),
+        ),
+
         // 3. Arrival alerts
         ..._arrivedDestinations.map((id) {
           try {
@@ -1318,6 +1415,46 @@ class _HomeScreenState extends State<HomeScreen>
           }
         }),
       ],
+    );
+  }
+
+  Widget _buildHomeTileButton(int index, IconData icon, String tooltip) {
+    final theme = Theme.of(context);
+    final selected = _homeTileLayer == index;
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: () => _setHomeTile(index),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline.withValues(alpha: 0.2),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            size: 22,
+            color: selected
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 
@@ -1572,6 +1709,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
     
     _fabAnimationController.dispose();
+    _homeMapController.dispose();
     super.dispose();
   }
 }
