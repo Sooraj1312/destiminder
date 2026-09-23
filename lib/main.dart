@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,14 +12,16 @@ import 'services/todo_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize services
-  await NotificationService().initialize();
-  await BackgroundMonitor.initialize(); // Initialize background service
-  
-  // Request permissions
-  await Permission.location.request();
-  await Permission.notification.request();
-  await Permission.locationAlways.request();
+  if (!kIsWeb) {
+    // Initialize native services
+    await NotificationService().initialize();
+    await BackgroundMonitor.initialize(); // Initialize background service
+    
+    // Request permissions
+    await Permission.location.request();
+    await Permission.notification.request();
+    await Permission.locationAlways.request();
+  }
   
   runApp(const DestiMinderApp());
 }
@@ -40,9 +43,28 @@ class DestiMinderApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.blue,
+            seedColor: const Color(0xFF2563EB),
+            brightness: Brightness.light,
+          ),
+          scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+          appBarTheme: const AppBarTheme(
+            elevation: 0,
+            centerTitle: false,
           ),
         ),
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF3B82F6),
+            brightness: Brightness.dark,
+          ),
+          scaffoldBackgroundColor: const Color(0xFF0F172A),
+          appBarTheme: const AppBarTheme(
+            elevation: 0,
+            centerTitle: false,
+          ),
+        ),
+        themeMode: ThemeMode.system,
         home: const HomeScreen(),
       ),
     );
