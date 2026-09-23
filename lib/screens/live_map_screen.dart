@@ -34,11 +34,9 @@ class _LiveMapScreenState extends State<LiveMapScreen>
   double _distanceToDestination = 0.0;
   bool _hasArrived = false;
   
-  // Map styles
-  static const String _osmTileLayer = 
-      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  static const String _osmDarkTileLayer = 
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  // Map tiles - 100% free, no API key needed (OSM + ColorFilter for dark)
+  static const String _osmTileLayer =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   @override
   void initState() {
@@ -295,12 +293,31 @@ class _LiveMapScreenState extends State<LiveMapScreen>
               ),
             ),
             children: [
-              TileLayer(
-                urlTemplate: isDark ? _osmDarkTileLayer : _osmTileLayer,
-                userAgentPackageName: 'com.sooraj.destiminder',
-                maxZoom: 19,
-                tileProvider: CachedTileProvider(),
-              ),
+              // OSM tiles - dark mode uses ColorFilter invert (no API key needed)
+              if (isDark)
+                ColorFiltered(
+                  colorFilter: const ColorFilter.matrix([
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0,
+                  ]),
+                  child: TileLayer(
+                    key: const ValueKey('live-dark'),
+                    urlTemplate: _osmTileLayer,
+                    userAgentPackageName: 'com.sooraj.destiminder',
+                    maxZoom: 19,
+                    tileProvider: CachedTileProvider(),
+                  ),
+                )
+              else
+                TileLayer(
+                  key: const ValueKey('live-light'),
+                  urlTemplate: _osmTileLayer,
+                  userAgentPackageName: 'com.sooraj.destiminder',
+                  maxZoom: 19,
+                  tileProvider: CachedTileProvider(),
+                ),
               
               if (_currentPosition != null)
                 MarkerLayer(
@@ -388,8 +405,9 @@ class _LiveMapScreenState extends State<LiveMapScreen>
                       currentDestination.longitude,
                     ),
                     radius: currentDestination.radius,
-                    color: (_hasArrived ? Colors.green : Colors.blue).withOpacity(0.1),
-                    borderColor: (_hasArrived ? Colors.green : Colors.blue).withOpacity(0.3),
+                    useRadiusInMeter: true,
+                    color: (_hasArrived ? Colors.green : Colors.blue).withOpacity(0.15),
+                    borderColor: (_hasArrived ? Colors.green : Colors.blue).withOpacity(0.6),
                     borderStrokeWidth: 2,
                   ),
                 ],
