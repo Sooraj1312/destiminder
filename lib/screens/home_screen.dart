@@ -1186,14 +1186,29 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
             children: [
-              TileLayer(
-                urlTemplate: isDark
-                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.sooraj.destiminder',
-                maxZoom: 19,
-                tileProvider: CachedTileProvider(),
-              ),
+              // OSM tiles — dark mode uses ColorFilter invert (no API key needed)
+              if (isDark)
+                ColorFiltered(
+                  colorFilter: const ColorFilter.matrix([
+                    -1,  0,  0, 0, 255,
+                     0, -1,  0, 0, 255,
+                     0,  0, -1, 0, 255,
+                     0,  0,  0, 1,   0,
+                  ]),
+                  child: TileLayer(
+                    key: const ValueKey('home-dark'),
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    tileProvider: CachedTileProvider(),
+                    userAgentPackageName: 'com.sooraj.destiminder',
+                  ),
+                )
+              else
+                TileLayer(
+                  key: const ValueKey('home-light'),
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  tileProvider: CachedTileProvider(),
+                  userAgentPackageName: 'com.sooraj.destiminder',
+                ),
               // Radius geofence circles for active destinations
               CircleLayer(
                 circles: activeDestinations.map((dest) {
@@ -1201,7 +1216,7 @@ class _HomeScreenState extends State<HomeScreen>
                     point: LatLng(dest.latitude, dest.longitude),
                     radius: dest.radius,
                     useRadiusInMeter: true,
-                    color: theme.colorScheme.primary.withOpacity(0.18),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.18),
                     borderColor: theme.colorScheme.primary,
                     borderStrokeWidth: 2,
                   );
@@ -1219,7 +1234,7 @@ class _HomeScreenState extends State<HomeScreen>
                       child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: theme.colorScheme.primary.withOpacity(0.2),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.2),
                         ),
                         child: Center(
                           child: Container(
@@ -1231,7 +1246,7 @@ class _HomeScreenState extends State<HomeScreen>
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: theme.colorScheme.primary.withOpacity(0.5),
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
                                   blurRadius: 8,
                                   spreadRadius: 2,
                                 ),
@@ -1256,7 +1271,7 @@ class _HomeScreenState extends State<HomeScreen>
                           border: Border.all(color: Colors.white, width: 2.5),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.red.withOpacity(0.4),
+                              color: Colors.red.withValues(alpha: 0.4),
                               blurRadius: 6,
                               offset: const Offset(0, 3),
                             ),

@@ -37,16 +37,16 @@ class _MapPickerScreenState extends State<MapPickerScreen>
   bool _voiceEnabled = false;
   LatLng? _currentLocation;
   
-  // Map style - Free OSM tiles with beautiful theme
-  static const String _osmTileLayer = 
-      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  static const String _osmDarkTileLayer = 
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-  
+  // Map tiles - 100% free, no API key needed,
+  //       using OpenStreetMap + ColorFilter for dark effect (100% free, no key)
+  static const String _osmTileLayer =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
   final List<MapTileSource> _tileLayers = [
     MapTileSource('Light', _osmTileLayer),
-    MapTileSource('Dark', _osmDarkTileLayer),
-    MapTileSource('Satellite', 
+    MapTileSource(
+        'Dark', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'), // OSM + dark ColorFilter
+    MapTileSource('Satellite',
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
   ];
   
@@ -203,15 +203,32 @@ class _MapPickerScreenState extends State<MapPickerScreen>
               ),
             ),
             children: [
-              // OSM Tile Layer
-              TileLayer(
-                urlTemplate: isDark 
-                    ? _tileLayers[1].url 
-                    : _tileLayers[_selectedTileLayer].url,
-                userAgentPackageName: 'com.sooraj.destiminder',
-                maxZoom: 19,
-                tileProvider: CachedTileProvider(),
-              ),
+              // Tile Layer — always use user-selected style
+              // Dark mode: apply invert+hue ColorFilter for free dark look
+              if (_selectedTileLayer == 1)
+                ColorFiltered(
+                  colorFilter: const ColorFilter.matrix([
+                    -1,  0,  0, 0, 255,
+                     0, -1,  0, 0, 255,
+                     0,  0, -1, 0, 255,
+                     0,  0,  0, 1,   0,
+                  ]),
+                  child: TileLayer(
+                    key: const ValueKey('dark'),
+                    urlTemplate: _tileLayers[1].url,
+                    userAgentPackageName: 'com.sooraj.destiminder',
+                    maxZoom: 19,
+                    tileProvider: CachedTileProvider(),
+                  ),
+                )
+              else
+                TileLayer(
+                  key: ValueKey(_selectedTileLayer),
+                  urlTemplate: _tileLayers[_selectedTileLayer].url,
+                  userAgentPackageName: 'com.sooraj.destiminder',
+                  maxZoom: 19,
+                  tileProvider: CachedTileProvider(),
+                ),
               
               // Current location marker
               if (_currentLocation != null)
