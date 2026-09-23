@@ -759,9 +759,8 @@ class _HomeScreenState extends State<HomeScreen>
                 vibrationPattern: destination.vibrationPattern,
                 voiceEnabled: value,
               );
-              
-              await destinationService.removeDestination(destination.id);
-              await destinationService.addDestination(updated);
+
+              await destinationService.updateDestination(updated);
               
               if (value) {
                 VoiceService().testVoice(destination.displayName);
@@ -846,9 +845,8 @@ class _HomeScreenState extends State<HomeScreen>
             vibrationPattern: result,
             voiceEnabled: destination.voiceEnabled,
           );
-          
-          await destinationService.removeDestination(destination.id);
-          await destinationService.addDestination(updated);
+
+          await destinationService.updateDestination(updated);
           
           _vibration.vibrateSuccess();
           

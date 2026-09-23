@@ -28,9 +28,20 @@ class DestinationService extends ChangeNotifier {
   }
 
   Future<void> addDestination(Destination destination) async {
-    _destinations.add(destination);
+    // Newest first - the latest added destination appears on top
+    _destinations.insert(0, destination);
     await _saveDestinations();
     notifyListeners();
+  }
+
+  // Update in place - list position stays the same when editing
+  Future<void> updateDestination(Destination updated) async {
+    final index = _destinations.indexWhere((d) => d.id == updated.id);
+    if (index != -1) {
+      _destinations[index] = updated;
+      await _saveDestinations();
+      notifyListeners();
+    }
   }
 
   Future<void> removeDestination(String id) async {
