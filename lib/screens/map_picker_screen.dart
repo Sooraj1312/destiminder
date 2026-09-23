@@ -263,7 +263,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
             ],
           ),
 
-          // Glass morphism search bar
+          // Unified glassmorphism search bar with back button
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 16,
@@ -273,63 +273,70 @@ class _MapPickerScreenState extends State<MapPickerScreen>
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.8),
+                    color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
                       width: 1,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 15,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      EmojiIcons.search(color: Colors.grey[600]),
-                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        onPressed: () => Navigator.pop(context),
+                        tooltip: 'Back',
+                      ),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: TextField(
                           controller: _searchController,
                           decoration: InputDecoration(
                             hintText: 'Search for a place...',
                             border: InputBorder.none,
-                            hintStyle: TextStyle(color: Colors.grey[600]),
+                            hintStyle: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                            ),
                           ),
                           onSubmitted: _searchLocation,
                           textInputAction: TextInputAction.search,
                         ),
                       ),
                       if (_isLoading)
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                        const Padding(
+                          padding: EdgeInsets.only(right: 12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      else if (_searchController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Icon(
+                            Icons.search_rounded,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                     ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Back button
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            left: 16,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(25),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: IconButton(
-                    icon: EmojiIcons.back(color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                    ),
                   ),
                 ),
               ),
