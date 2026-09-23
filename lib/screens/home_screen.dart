@@ -5,7 +5,11 @@ import 'package:provider/provider.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'dart:async';
-import 'dart:math';  
+import 'dart:math';
+import 'dart:ui';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:geolocator/geolocator.dart';  
 import '../services/background_monitor.dart';
 import '../services/voice_service.dart';
@@ -941,16 +945,17 @@ class _HomeScreenState extends State<HomeScreen>
           
           return SlidingUpPanel(
             controller: _panelController,
-            minHeight: 120,
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
+            minHeight: 140,
+            maxHeight: MediaQuery.of(context).size.height * 0.78,
             panelSnapping: true,
             parallaxEnabled: true,
-            parallaxOffset: 0.5,
+            parallaxOffset: 0.4,
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(30),
+              top: Radius.circular(28),
             ),
             header: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              width: MediaQuery.of(context).size.width,
+              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Center(
                 child: Container(
                   width: 40,
@@ -966,11 +971,11 @@ class _HomeScreenState extends State<HomeScreen>
               decoration: BoxDecoration(
                 color: theme.scaffoldBackgroundColor,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(30),
+                  top: Radius.circular(28),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withOpacity(0.06),
                     blurRadius: 20,
                     offset: const Offset(0, -5),
                   ),
@@ -979,7 +984,7 @@ class _HomeScreenState extends State<HomeScreen>
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                     child: Row(
                       children: [
                         Text(
@@ -1034,7 +1039,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-            body: _buildMapPlaceholder(activeCount),
+            body: _buildRealMapAndHeroSection(destinationService),
           );
         },
       ),
@@ -1140,374 +1145,306 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildMapPlaceholder(int activeCount) {
-    return Consumer<DestinationService>(
-      builder: (context, destinationService, child) {
-        final activeDestinations = destinationService.activeDestinations;
-        
-        return Stack(
-          children: [
-            // Background map
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.blue.shade900,
-                    Colors.blue.shade600,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+  Widget _buildRealMapAndHeroSection(DestinationService destinationService) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final activeDestinations = destinationService.activeDestinations;
+
+    // Default location (current location or fallback)
+    final currentLatLng = _currentPosition != null
+        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+        : (activeDestinations.isNotEmpty
+            ? LatLng(activeDestinations.first.latitude, activeDestinations.first.longitude)
+            : const LatLng(9.9312, 76.2673));
+
+    // Find nearest active destination
+    Destination? nearestDest;
+    double? minDistance;
+    for (var dest in activeDestinations) {
+      final d = _distances[dest.id];
+      if (d != null) {
+        if (minDistance == null || d < minDistance) {
+          minDistance = d;
+          nearestDest = dest;
+        }
+      }
+    }
+    nearestDest ??= activeDestinations.isNotEmpty ? activeDestinations.first : null;
+
+
+    return Stack(
+      children: [
+        // 1. Real interactive/ambient map
+        Positioned.fill(
+          bottom: 110,
+          child: FlutterMap(
+            options: MapOptions(
+              initialCenter: currentLatLng,
+              initialZoom: activeDestinations.isNotEmpty ? 13.5 : 15.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
               ),
-              child: Stack(
-                children: [
-                  // Mini map view with destinations
-                  if (activeDestinations.isNotEmpty && _currentPosition != null)
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: MiniMapPainter(
-                          destinations: activeDestinations,
-                          currentLocation: _currentPosition,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: isDark
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.sooraj.destiminder',
+                maxZoom: 19,
+                tileProvider: CachedTileProvider(),
+              ),
+              // Radius geofence circles for active destinations
+              CircleLayer(
+                circles: activeDestinations.map((dest) {
+                  return CircleMarker(
+                    point: LatLng(dest.latitude, dest.longitude),
+                    radius: dest.radius,
+                    useRadiusInMeter: true,
+                    color: theme.colorScheme.primary.withOpacity(0.18),
+                    borderColor: theme.colorScheme.primary,
+                    borderStrokeWidth: 2,
+                  );
+                }).toList(),
+              ),
+              // Marker pins
+              MarkerLayer(
+                markers: [
+                  // User location pulsing marker
+                  if (_currentPosition != null)
+                    Marker(
+                      point: currentLatLng,
+                      width: 48,
+                      height: 48,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primary.withOpacity(0.2),
                         ),
-                      ),
-                    ),
-                  
-                  // Destinations indicators
-                  ...activeDestinations.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final dest = entry.value;
-                    
-                    // Calculate real distance if we have current position
-                    String distanceText = '';
-                    if (_currentPosition != null) {
-                      // 👇 USE _distances MAP INSTEAD OF DIRECT CALCULATION
-                      if (_distances.containsKey(dest.id)) {
-                        final distance = _distances[dest.id]!;
-                        if (distance < 1000) {
-                          distanceText = '${distance.toStringAsFixed(0)}m';
-                        } else {
-                          distanceText = '${(distance/1000).toStringAsFixed(1)}km';
-                        }
-                      } else {
-                        // Fallback to direct calculation if not in _distances
-                        final distance = Geolocator.distanceBetween(
-                          _currentPosition!.latitude,
-                          _currentPosition!.longitude,
-                          dest.latitude,
-                          dest.longitude,
-                        );
-                        
-                        if (distance < 1000) {
-                          distanceText = '${distance.toStringAsFixed(0)}m';
-                        } else {
-                          distanceText = '${(distance/1000).toStringAsFixed(1)}km';
-                        }
-                      }
-                    }
-                    
-                    // Position them in a circle around the center
-                    final angle = (index * 2 * pi / max(activeDestinations.length, 1));
-                    final radius = 120.0;
-                    final left = MediaQuery.of(context).size.width / 2 + 
-                                radius * cos(angle) - 25;
-                    final top = 200 + radius * sin(angle) - 25;
-                    
-                    return Positioned(
-                      left: left,
-                      top: top,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
+                        child: Center(
+                          child: Container(
+                            width: 20,
+                            height: 20,
                             decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.9),
                               shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 3,
-                              ),
+                              color: theme.colorScheme.primary,
+                              border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.red.withOpacity(0.5),
-                                  blurRadius: 10,
+                                  color: theme.colorScheme.primary.withOpacity(0.5),
+                                  blurRadius: 8,
                                   spreadRadius: 2,
                                 ),
                               ],
                             ),
-                            child: Center(
-                              child: Text(
-                                '${index + 1}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                            ),
                           ),
-                          if (distanceText.isNotEmpty)
-                            Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                distanceText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
-                    );
-                  }),
-                  
-                  // Center - your location
-                  Positioned(
-                    left: MediaQuery.of(context).size.width / 2 - 25,
-                    top: 175,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 3,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.5),
-                                blurRadius: 15,
-                                spreadRadius: 3,
-                              ),
-                            ],
-                          ),
-                          child:Center(
-                            child: EmojiIcons.myLocation(color: Colors.white),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'YOU',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
-                  ),
-                  
-                  // Info text overlay
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (activeDestinations.isEmpty) ...[
-                          EmojiIcons.coordinates(size: 80, color: Colors.white.withOpacity(0.2)),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'No active destinations',
-                            style: TextStyle(
+                  // Destination numbered pins
+                  ...activeDestinations.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final dest = entry.value;
+                    return Marker(
+                      point: LatLng(dest.latitude, dest.longitude),
+                      width: 42,
+                      height: 42,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade600,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.4),
+                              blurRadius: 6,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${idx + 1}',
+                            style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 20,
                               fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ] else ...[
-                          const SizedBox(height: 300),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            child: Text(
-                              '$activeCount destination${activeCount > 1 ? 's' : ''} active',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap destination card to view on map',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
                               fontSize: 14,
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ),
-            ),
+            ],
+          ),
+        ),
+                  
+        // 2. Active Travel Hero Card at top
+        Positioned(
+          top: 16,
+          left: 16,
+          right: 16,
+          child: nearestDest != null
+              ? _buildActiveHeroCard(nearestDest, minDistance)
+              : _buildInactiveHeroCard(),
+        ),
 
-            ..._arrivedDestinations.map((id) {
-              try {
-                final destination = destinationService.destinations.firstWhere(
-                  (d) => d.id == id,
-                );
-                return _buildArrivalCard(destination);
-              } catch (e) {
-                // Destination not found, return empty widget
-                return const SizedBox.shrink();
-              }
-            }).toList(),
-            
-            // App bar (keep existing)
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
+        // 3. Arrival alerts
+        ..._arrivedDestinations.map((id) {
+          try {
+            final destination = destinationService.destinations.firstWhere(
+              (d) => d.id == id,
+            );
+            return _buildArrivalCard(destination);
+          } catch (e) {
+            return const SizedBox.shrink();
+          }
+        }),
+      ],
+    );
+  }
+
+  Widget _buildActiveHeroCard(Destination dest, double? distance) {
+    final theme = Theme.of(context);
+    final distText = distance != null
+        ? (distance < 1000 ? '${distance.toStringAsFixed(0)}m away' : '${(distance / 1000).toStringAsFixed(1)}km away')
+        : 'Calculating...';
+    final isArriving = distance != null && distance <= dest.radius;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isArriving
+                  ? Colors.green
+                  : theme.colorScheme.outline.withValues(alpha: 0.2),
+              width: isArriving ? 2 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isArriving
+                      ? Colors.green.withValues(alpha: 0.15)
+                      : theme.colorScheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isArriving ? Icons.celebration_rounded : Icons.navigation_rounded,
+                  color: isArriving ? Colors.green : theme.colorScheme.primary,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Left side - App title
+                    Text(
+                      dest.displayName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Text(
-                          'DestiMinder',
+                        Text(
+                          distText,
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            color: isArriving ? Colors.green : theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '• ${dest.vibrationPattern}',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12,
                           ),
                         ),
                       ],
-                    ),
-                    
-                    // Right side - Buttons
-                    Flexible(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          // Background monitor toggle
-                          Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              color: _backgroundMonitoring 
-                                  ? Colors.green.withOpacity(0.3)
-                                  : Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              icon: _backgroundMonitoring 
-                              ? EmojiIcons.backgroundOn(color: Colors.green) 
-                              : EmojiIcons.backgroundOff(color: Colors.white),
-                              onPressed: _toggleBackgroundMonitoring,
-                              tooltip: _backgroundMonitoring 
-                                  ? 'Background monitoring ON' 
-                                  : 'Background monitoring OFF',
-                            ),
-                          ),
-                          
-                          // Voice master toggle
-                          Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              icon: _masterVoiceEnabled 
-                              ? EmojiIcons.voiceOn(color: Colors.white)
-                              : EmojiIcons.voiceOff(color: Colors.white),
-                              onPressed: () async {
-                                final prefs = await SharedPreferences.getInstance();
-                                setState(() {
-                                  _masterVoiceEnabled = !_masterVoiceEnabled;
-                                  VoiceService.masterEnabled = _masterVoiceEnabled;
-                                });
-                                await prefs.setBool('master_voice_enabled', _masterVoiceEnabled);
-                                
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _masterVoiceEnabled 
-                                          ? 'Voice announcements ON' 
-                                          : 'Voice announcements OFF',
-                                    ),
-                                    duration: const Duration(seconds: 1),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          
-                          // History button
-                          Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              icon: EmojiIcons.history(color: Colors.white),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                                );
-                              },
-                            ),
-                          ),
-                          
-                          // Notification badge
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Badge(
-                              isLabelVisible: activeCount > 0,
-                              label: Text('$activeCount'),
-                              child: EmojiIcons.notifications(color: Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
               ),
+              IconButton.filledTonal(
+                icon: const Icon(Icons.fullscreen_rounded),
+                tooltip: 'Open Live Map',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LiveMapScreen(initialDestination: dest),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInactiveHeroCard() {
+    final theme = Theme.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.88),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.2),
             ),
-          ],
-        );
-      },
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                color: theme.colorScheme.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'No active destinations • Toggle switch to track',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1624,95 +1561,11 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-class MiniMapPainter extends CustomPainter {
-  final List<Destination> destinations;
-  final Position? currentLocation;
-
-  MiniMapPainter({required this.destinations, required this.currentLocation});
-
+class CachedTileProvider extends TileProvider {
   @override
-  void paint(Canvas canvas, Size size) {
-    if (destinations.isEmpty || currentLocation == null) return;
-
-    final center = Offset(size.width / 2, 200);
-    final radius = 120.0;
-    
-    // Paint for lines
-    final linePaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    // Paint for distance text background
-    final textBgPaint = Paint()
-      ..color = Colors.black.withOpacity(0.6)
-      ..style = PaintingStyle.fill;
-
-    for (int i = 0; i < destinations.length; i++) {
-      final dest = destinations[i];
-      final angle = (i * 2 * pi / destinations.length);
-      final destOffset = Offset(
-        center.dx + radius * cos(angle),
-        center.dy + radius * sin(angle),
-      );
-      
-      // Draw line from center to destination
-      canvas.drawLine(center, destOffset, linePaint);
-      
-      // Calculate real distance
-      final distance = Geolocator.distanceBetween(
-        currentLocation!.latitude,
-        currentLocation!.longitude,
-        dest.latitude,
-        dest.longitude,
-      );
-      
-      // Format distance text
-      String distanceText;
-      if (distance < 1000) {
-        distanceText = '${distance.toStringAsFixed(0)}m';
-      } else {
-        distanceText = '${(distance/1000).toStringAsFixed(1)}km';
-      }
-      
-      // Draw distance label on the line
-      final textSpan = TextSpan(
-        text: distanceText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      
-      final textOffset = Offset(
-        (center.dx + destOffset.dx) / 2 - textPainter.width / 2,
-        (center.dy + destOffset.dy) / 2 - 10,
-      );
-      
-      // Draw background for text
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            textOffset.dx - 4,
-            textOffset.dy - 2,
-            textPainter.width + 8,
-            textPainter.height + 4,
-          ),
-          const Radius.circular(8),
-        ),
-        textBgPaint,
-      );
-      
-      textPainter.paint(canvas, textOffset);
-    }
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
+    return CachedNetworkImageProvider(
+      getTileUrl(coordinates, options),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
