@@ -28,7 +28,7 @@ class Destination {
     required this.address,
     required this.createdAt,
     this.radius = 100,
-    this.isActive = false,
+    this.isActive = true,
     this.vibrationPattern = 'Default',
     this.voiceEnabled = false,  
   });
