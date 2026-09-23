@@ -7,8 +7,10 @@ class DestinationCard extends StatelessWidget {
   final Destination destination;
   final VoidCallback onTap;
   final VoidCallback onDelete;
-  final ValueChanged<bool> onToggleActive; 
-  final double? liveDistance; 
+  final ValueChanged<bool> onToggleActive;
+  final double? liveDistance;
+  // Optional drag handle rendered inside the card (right edge)
+  final Widget? dragHandle;
 
   const DestinationCard({
     super.key,
@@ -17,6 +19,7 @@ class DestinationCard extends StatelessWidget {
     required this.onDelete,
     required this.onToggleActive,
     this.liveDistance,
+    this.dragHandle,
   });
 
   @override
@@ -226,6 +229,11 @@ class DestinationCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    // Drag handle inside the card - right edge
+                    if (dragHandle != null) ...[
+                      const SizedBox(width: 8),
+                      dragHandle!,
+                    ],
                   ],
                 ),
               ),

@@ -142,8 +142,8 @@ class _HomeScreenState extends State<HomeScreen>
       SnackBar(
         content: Text(_destinationsLocked
             ? 'List locked - positions safe'
-            : 'List unlocked - drag handle to reorder'),
-        duration: const Duration(seconds: 1),
+            : 'Unlocked - panel fixed, drag cards to reorder'),
+        duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -1016,6 +1016,8 @@ class _HomeScreenState extends State<HomeScreen>
             panelSnapping: true,
             parallaxEnabled: true,
             parallaxOffset: 0.4,
+            // Unlocked while reordering - panel stays fixed so cards drag freely
+            isDraggable: _destinationsLocked,
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(28),
             ),
@@ -1225,75 +1227,65 @@ class _HomeScreenState extends State<HomeScreen>
 
           return Container(
             key: ValueKey('dest_${destination.id}'),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Drag handle on the side, like music players
-                Padding(
-                  padding: const EdgeInsets.only(left: 6, top: 22),
-                  child: ReorderableDragStartListener(
-                    index: index,
-                    enabled: !_destinationsLocked,
-                    child: Tooltip(
-                      message: _destinationsLocked
-                          ? 'Unlock to reorder'
-                          : 'Drag to reorder',
-                      child: Icon(
-                        Icons.drag_handle_rounded,
-                        color: _destinationsLocked
-                            ? Colors.grey.withValues(alpha: 0.3)
-                            : Theme.of(context).colorScheme.primary,
-                        size: 26,
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: AnimationConfiguration.staggeredList(
-                    position: index,
-                    duration: const Duration(milliseconds: 375),
-                    child: SlideAnimation(
-                      verticalOffset: 50.0,
-                      child: FadeInAnimation(
-                        child: DestinationCard(
-                          destination: destination,
-                          onTap: () {
-                            _showDestinationDetails(destination);
-                          },
-                          onDelete: () async {
-                            await service.removeDestination(destination.id);
-                            await _vibration.vibrateSuccess();
-                          },
-                          onToggleActive: (value) async {
-                            await service.toggleActive(destination.id);
-                            await _vibration.vibrateSuccess();
+            child: AnimationConfiguration.staggeredList(
+              position: index,
+              duration: const Duration(milliseconds: 375),
+              child: SlideAnimation(
+                verticalOffset: 50.0,
+                child: FadeInAnimation(
+                  child: DestinationCard(
+                    destination: destination,
+                    onTap: () {
+                      _showDestinationDetails(destination);
+                    },
+                    onDelete: () async {
+                      await service.removeDestination(destination.id);
+                      await _vibration.vibrateSuccess();
+                    },
+                    onToggleActive: (value) async {
+                      await service.toggleActive(destination.id);
+                      await _vibration.vibrateSuccess();
 
-                            final activeCount =
-                                service.activeDestinations.length;
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  activeCount == 0
-                                      ? 'No active destinations'
-                                      : '$activeCount destination${activeCount > 1 ? 's' : ''} active',
-                                ),
-                                behavior: SnackBarBehavior.floating,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.all(Radius.circular(12)),
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          },
-                          liveDistance: liveDistance,
+                      final activeCount =
+                          service.activeDestinations.length;
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            activeCount == 0
+                                ? 'No active destinations'
+                                : '$activeCount destination${activeCount > 1 ? 's' : ''} active',
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.all(Radius.circular(12)),
+                          ),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                    liveDistance: liveDistance,
+                    // Drag handle inside the card - right edge
+                    dragHandle: ReorderableDragStartListener(
+                      index: index,
+                      enabled: !_destinationsLocked,
+                      child: Tooltip(
+                        message: _destinationsLocked
+                            ? 'Unlock to reorder'
+                            : 'Drag to reorder',
+                        child: Icon(
+                          Icons.drag_handle_rounded,
+                          color: _destinationsLocked
+                              ? Colors.grey.withValues(alpha: 0.35)
+                              : Theme.of(context).colorScheme.primary,
+                          size: 24,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           );
         },
