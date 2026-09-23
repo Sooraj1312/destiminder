@@ -58,6 +58,21 @@ class DestinationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Reorder destinations (drag-and-drop list order, persisted)
+  Future<void> reorderDestinations(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 ||
+        newIndex < 0 ||
+        oldIndex >= _destinations.length ||
+        newIndex > _destinations.length) {
+      return;
+    }
+    if (oldIndex < newIndex) newIndex -= 1;
+    final item = _destinations.removeAt(oldIndex);
+    _destinations.insert(newIndex, item);
+    await _saveDestinations();
+    notifyListeners();
+  }
+
   Future<void> _saveDestinations() async {
     final prefs = await SharedPreferences.getInstance();
     final String encoded = json.encode(

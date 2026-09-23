@@ -52,6 +52,8 @@ class _HomeScreenState extends State<HomeScreen>
   int _homeTileLayer = 0;
   bool _isLocatingHome = false;
   final MapController _homeMapController = MapController();
+  // Destinations list order lock - locked = no accidental moves
+  bool _destinationsLocked = true;
   
 
   @override
@@ -66,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen>
     _checkBackgroundState();
     _loadSavedVoiceState();
     _loadHomeTile();
+    _loadListLock();
     
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -118,6 +121,32 @@ class _HomeScreenState extends State<HomeScreen>
     } finally {
       if (mounted) setState(() => _isLocatingHome = false);
     }
+  }
+
+  Future<void> _loadListLock() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool('destinations_locked');
+    // Default locked = safe, no accidental moves
+    if (saved != null && mounted) {
+      setState(() => _destinationsLocked = saved);
+    }
+  }
+
+  Future<void> _toggleListLock() async {
+    setState(() => _destinationsLocked = !_destinationsLocked);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('destinations_locked', _destinationsLocked);
+    await _vibration.vibrateSuccess();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_destinationsLocked
+            ? 'List locked - positions safe'
+            : 'List unlocked - drag handle to reorder'),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _onDestinationsChanged() {
@@ -1024,13 +1053,36 @@ class _HomeScreenState extends State<HomeScreen>
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                     child: Row(
                       children: [
-                        Text(
-                          'Your Destinations',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Text(
+                            'Your Destinations',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const Spacer(),
+                        // List order lock - prevents accidental moves
+                        IconButton(
+                          icon: Icon(
+                            _destinationsLocked
+                                ? Icons.lock_outline_rounded
+                                : Icons.lock_open_rounded,
+                          ),
+                          tooltip: _destinationsLocked
+                              ? 'Unlock to reorder'
+                              : 'Lock list order',
+                          color: _destinationsLocked
+                              ? theme.colorScheme.onSurfaceVariant
+                              : theme.colorScheme.primary,
+                          onPressed: _toggleListLock,
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.all(6),
+                            minimumSize: const Size(36, 36),
+                          ),
+                        ),
                         if (activeCount > 0)
                           IconButton(
                             icon: EmojiIcons.notificationsOff(),
@@ -1048,6 +1100,11 @@ class _HomeScreenState extends State<HomeScreen>
                               );
                             },
                             tooltip: 'Deactivate all',
+                            style: IconButton.styleFrom(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.all(6),
+                              minimumSize: const Size(36, 36),
+                            ),
                           ),
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -1071,7 +1128,11 @@ class _HomeScreenState extends State<HomeScreen>
                   Expanded(
                     child: destinations.isEmpty
                         ? _buildEmptyState()
-                        : _buildDestinationsList(destinations, destinationService),
+                        : _buildDestinationsList(
+                            destinations,
+                            destinationService,
+                            scrollController,
+                          ),
                   ),
                 ],
               ),
@@ -1128,53 +1189,111 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildDestinationsList(
     List<Destination> destinations,
     DestinationService service,
+    ScrollController scrollController,
   ) {
     return AnimationLimiter(
-      child: ListView.builder(
+      child: ReorderableListView.builder(
+        scrollController: scrollController,
         padding: const EdgeInsets.only(top: 8, bottom: 100),
         itemCount: destinations.length,
+        buildDefaultDragHandles: false,
+        proxyDecorator: (child, index, animation) {
+          return Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(20),
+            child: child,
+          );
+        },
+        onReorder: (oldIndex, newIndex) async {
+          if (_destinationsLocked) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('List is locked - tap lock icon to reorder'),
+                duration: Duration(seconds: 1),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            return;
+          }
+          await service.reorderDestinations(oldIndex, newIndex);
+          await _vibration.vibrateSuccess();
+        },
         itemBuilder: (context, index) {
           final destination = destinations[index];
           final liveDistance = _distances[destination.id];
-          
-          return AnimationConfiguration.staggeredList(
-            position: index,
-            duration: const Duration(milliseconds: 375),
-            child: SlideAnimation(
-              verticalOffset: 50.0,
-              child: FadeInAnimation(
-                child: DestinationCard(
-                  destination: destination,
-                  onTap: () {
-                    _showDestinationDetails(destination);
-                  },
-                  onDelete: () async {
-                    await service.removeDestination(destination.id);
-                    await _vibration.vibrateSuccess();
-                  },
-                  onToggleActive: (value) async {
-                    await service.toggleActive(destination.id);
-                    await _vibration.vibrateSuccess();
-                    
-                    final activeCount = service.activeDestinations.length;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          activeCount == 0
-                              ? 'No active destinations'
-                              : '$activeCount destination${activeCount > 1 ? 's' : ''} active',
-                        ),
-                        behavior: SnackBarBehavior.floating,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        duration: const Duration(seconds: 1),
+
+          return Container(
+            key: ValueKey('dest_${destination.id}'),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag handle on the side, like music players
+                Padding(
+                  padding: const EdgeInsets.only(left: 6, top: 22),
+                  child: ReorderableDragStartListener(
+                    index: index,
+                    enabled: !_destinationsLocked,
+                    child: Tooltip(
+                      message: _destinationsLocked
+                          ? 'Unlock to reorder'
+                          : 'Drag to reorder',
+                      child: Icon(
+                        Icons.drag_handle_rounded,
+                        color: _destinationsLocked
+                            ? Colors.grey.withValues(alpha: 0.3)
+                            : Theme.of(context).colorScheme.primary,
+                        size: 26,
                       ),
-                    );
-                  },
-                  liveDistance: liveDistance,
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: AnimationConfiguration.staggeredList(
+                    position: index,
+                    duration: const Duration(milliseconds: 375),
+                    child: SlideAnimation(
+                      verticalOffset: 50.0,
+                      child: FadeInAnimation(
+                        child: DestinationCard(
+                          destination: destination,
+                          onTap: () {
+                            _showDestinationDetails(destination);
+                          },
+                          onDelete: () async {
+                            await service.removeDestination(destination.id);
+                            await _vibration.vibrateSuccess();
+                          },
+                          onToggleActive: (value) async {
+                            await service.toggleActive(destination.id);
+                            await _vibration.vibrateSuccess();
+
+                            final activeCount =
+                                service.activeDestinations.length;
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  activeCount == 0
+                                      ? 'No active destinations'
+                                      : '$activeCount destination${activeCount > 1 ? 's' : ''} active',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(12)),
+                                ),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          liveDistance: liveDistance,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         },
