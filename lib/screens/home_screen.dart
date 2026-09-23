@@ -842,7 +842,98 @@ class _HomeScreenState extends State<HomeScreen>
     final theme = Theme.of(context);
     
     return Scaffold(
-      extendBody: true,
+      extendBody: false,
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.radar_rounded,
+                color: theme.colorScheme.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'DestiMinder',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                Consumer<DestinationService>(
+                  builder: (context, service, _) {
+                    final count = service.activeDestinations.length;
+                    return Text(
+                      count > 0
+                          ? '$count destination${count > 1 ? 's' : ''} active'
+                          : 'Ready to travel',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: count > 0 ? theme.colorScheme.primary : theme.colorScheme.outline,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          // Background monitor toggle
+          IconButton(
+            icon: Icon(
+              _backgroundMonitoring ? Icons.sync_rounded : Icons.sync_disabled_rounded,
+              color: _backgroundMonitoring ? Colors.green : theme.colorScheme.onSurfaceVariant,
+            ),
+            tooltip: _backgroundMonitoring ? 'Background monitoring ON' : 'Background monitoring OFF',
+            onPressed: _toggleBackgroundMonitoring,
+          ),
+          // Master Voice toggle
+          IconButton(
+            icon: Icon(
+              _masterVoiceEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+              color: _masterVoiceEnabled ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+            ),
+            tooltip: _masterVoiceEnabled ? 'Voice announcements ON' : 'Voice announcements OFF',
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              setState(() {
+                _masterVoiceEnabled = !_masterVoiceEnabled;
+                VoiceService.masterEnabled = _masterVoiceEnabled;
+              });
+              await prefs.setBool('master_voice_enabled', _masterVoiceEnabled);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_masterVoiceEnabled ? 'Voice announcements ON' : 'Voice announcements OFF'),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+          // History button
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: 'Arrival History',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: Consumer<DestinationService>(
         builder: (context, destinationService, child) {
           final destinations = destinationService.destinations;
@@ -950,11 +1041,11 @@ class _HomeScreenState extends State<HomeScreen>
       
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addDestination,
-        icon: EmojiIcons.addLocation(),
+        icon: const Icon(Icons.add_location_alt_rounded),
         label: const Text('Add Destination'),
-        elevation: 4,
+        elevation: 3,
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
