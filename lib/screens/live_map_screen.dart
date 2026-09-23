@@ -499,7 +499,7 @@ class _LiveMapScreenState extends State<LiveMapScreen>
               if (!_hasArrived) ...[
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
-                  value: (_distanceToDestination / 500).clamp(0, 1),
+                  value: (1.0 - ((_distanceToDestination - destination.radius) / (destination.radius > 250 ? destination.radius * 2 : 500.0))).clamp(0.0, 1.0),
                   backgroundColor: Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(
                     _distanceToDestination < 100 
