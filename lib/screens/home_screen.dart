@@ -54,6 +54,8 @@ class _HomeScreenState extends State<HomeScreen>
   final MapController _homeMapController = MapController();
   // Destinations list order lock - locked = no accidental moves
   bool _destinationsLocked = true;
+  // Priority route line - optional, connects active stops in list order
+  bool _showRouteLine = false;
   
 
   @override
@@ -69,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen>
     _loadSavedVoiceState();
     _loadHomeTile();
     _loadListLock();
+    _loadRouteLine();
     
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -143,6 +146,31 @@ class _HomeScreenState extends State<HomeScreen>
         content: Text(_destinationsLocked
             ? 'List locked - positions safe'
             : 'Unlocked - panel fixed, drag cards to reorder'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _loadRouteLine() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool('show_route_line');
+    if (saved != null && mounted) {
+      setState(() => _showRouteLine = saved);
+    }
+  }
+
+  Future<void> _toggleRouteLine() async {
+    setState(() => _showRouteLine = !_showRouteLine);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('show_route_line', _showRouteLine);
+    await _vibration.vibrateSuccess();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_showRouteLine
+            ? 'Route line ON - destinations connected in list order'
+            : 'Route line OFF'),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
@@ -1375,6 +1403,19 @@ class _HomeScreenState extends State<HomeScreen>
                   );
                 }).toList(),
               ),
+              // Priority route line - connects stops in list order (optional)
+              if (_showRouteLine && activeDestinations.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: activeDestinations
+                          .map((d) => LatLng(d.latitude, d.longitude))
+                          .toList(),
+                      color: theme.colorScheme.primary,
+                      strokeWidth: 3.5,
+                    ),
+                  ],
+                ),
               // Marker pins
               MarkerLayer(
                 markers: [
@@ -1459,7 +1500,51 @@ class _HomeScreenState extends State<HomeScreen>
               : _buildInactiveHeroCard(),
         ),
 
-        // 2b. Map style switcher (same as adding page) + current location below
+        // 2b. Route line toggle - left side, only with 2+ active stops
+        if (activeDestinations.length >= 2)
+          Positioned(
+            top: 150,
+            left: 16,
+            child: Tooltip(
+              message: _showRouteLine
+                  ? 'Hide travel order line'
+                  : 'Show travel order line',
+              child: GestureDetector(
+                onTap: _toggleRouteLine,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _showRouteLine
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surface.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: _showRouteLine
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline.withValues(alpha: 0.2),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.route_rounded,
+                    size: 22,
+                    color: _showRouteLine
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // 2c. Map style switcher (same as adding page) + current location below
         Positioned(
           top: 150,
           right: 16,
