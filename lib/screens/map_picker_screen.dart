@@ -821,8 +821,7 @@ class CachedTileProvider extends TileProvider {
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     return CachedNetworkImageProvider(
       getTileUrl(coordinates, options),
-      maxWidth: 256,
-      maxHeight: 256,
+      headers: headers,
     );
   }
 }

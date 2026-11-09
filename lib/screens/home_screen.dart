@@ -1355,6 +1355,8 @@ class _HomeScreenState extends State<HomeScreen>
             options: MapOptions(
               initialCenter: currentLatLng,
               initialZoom: activeDestinations.isNotEmpty ? 13.5 : 15.0,
+              maxZoom: 19.0,
+              minZoom: 3.0,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
               ),
@@ -1915,6 +1917,7 @@ class CachedTileProvider extends TileProvider {
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     return CachedNetworkImageProvider(
       getTileUrl(coordinates, options),
+      headers: headers,
     );
   }
 }
