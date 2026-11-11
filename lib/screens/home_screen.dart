@@ -26,6 +26,9 @@ import 'history_screen.dart';
 import '../widgets/emoji_icons.dart';
 import '../widgets/todo_list.dart';
 import '../services/todo_service.dart';
+import '../services/auth_service.dart';
+import '../services/cloud_sync_service.dart';
+import '../widgets/account_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -77,6 +80,9 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final destinationService = Provider.of<DestinationService>(context, listen: false);
       destinationService.addListener(_onDestinationsChanged);
+
+      final cloudSync = Provider.of<CloudSyncService>(context, listen: false);
+      cloudSync.settingsRevision.addListener(_reloadSyncedSettings);
       
       // Initial check
       _onDestinationsChanged();
@@ -86,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadSavedVoiceState() async {
     final prefs = await SharedPreferences.getInstance();
     final savedState = prefs.getBool('master_voice_enabled');
-    if (savedState != null) {
+    if (savedState != null && mounted) {
       setState(() {
         _masterVoiceEnabled = savedState;
         VoiceService.masterEnabled = savedState;
@@ -107,6 +113,32 @@ class _HomeScreenState extends State<HomeScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('home_tile_layer', index);
     await _vibration.vibrateSuccess();
+    _scheduleSettingsPush();
+  }
+
+  void _reloadSyncedSettings() {
+    if (!mounted) return;
+    _loadSavedVoiceState();
+    _loadHomeTile();
+    _loadListLock();
+    _loadRouteLine();
+    _checkBackgroundState();
+  }
+
+  void _scheduleSettingsPush() {
+    if (!mounted) return;
+    context.read<CloudSyncService>().schedulePush();
+  }
+
+  void _showAccountSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const AccountSheet(),
+    );
   }
 
   Future<void> _goToCurrentLocationHome() async {
@@ -139,6 +171,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() => _destinationsLocked = !_destinationsLocked);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('destinations_locked', _destinationsLocked);
+    _scheduleSettingsPush();
     await _vibration.vibrateSuccess();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -164,6 +197,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() => _showRouteLine = !_showRouteLine);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('show_route_line', _showRouteLine);
+    _scheduleSettingsPush();
     await _vibration.vibrateSuccess();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -313,11 +347,14 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _checkBackgroundState() async {
     final prefs = await SharedPreferences.getInstance();
     final wasRunning = prefs.getBool('background_monitoring') ?? false;
+    if (!mounted) return;
     setState(() {
       _backgroundMonitoring = wasRunning;
     });
     if (wasRunning) {
       await BackgroundMonitor.checkInitialState();
+    } else if (BackgroundMonitor.isRunning) {
+      await BackgroundMonitor.stopMonitoring();
     }
   }
 
@@ -428,6 +465,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (status.isGranted) {
         await BackgroundMonitor.startMonitoring();
         setState(() => _backgroundMonitoring = true);
+        _scheduleSettingsPush();
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -446,6 +484,7 @@ class _HomeScreenState extends State<HomeScreen>
     } else {
       await BackgroundMonitor.stopMonitoring();
       setState(() => _backgroundMonitoring = false);
+      _scheduleSettingsPush();
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -983,6 +1022,39 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
         actions: [
+          Consumer<AuthService>(
+            builder: (context, auth, _) {
+              if (!auth.isAvailable) return const SizedBox.shrink();
+              final photoUrl = auth.user?.photoURL;
+              return IconButton(
+                icon: auth.isSignedIn
+                    ? CircleAvatar(
+                        radius: 12,
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                            ? NetworkImage(photoUrl)
+                            : null,
+                        child: photoUrl == null || photoUrl.isEmpty
+                            ? Icon(
+                                Icons.person_rounded,
+                                size: 14,
+                                color: theme.colorScheme.primary,
+                              )
+                            : null,
+                      )
+                    : const Icon(Icons.account_circle_outlined),
+                tooltip: auth.isSignedIn
+                    ? (auth.user?.email ?? 'Account & sync')
+                    : 'Sign in to sync',
+                onPressed: _showAccountSheet,
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.all(6),
+                  minimumSize: const Size(36, 36),
+                ),
+              );
+            },
+          ),
           // Background monitor toggle
           IconButton(
             icon: Icon(
@@ -1006,6 +1078,7 @@ class _HomeScreenState extends State<HomeScreen>
                 VoiceService.masterEnabled = _masterVoiceEnabled;
               });
               await prefs.setBool('master_voice_enabled', _masterVoiceEnabled);
+              _scheduleSettingsPush();
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -1902,6 +1975,13 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final destinationService = Provider.of<DestinationService>(context, listen: false);
       destinationService.removeListener(_onDestinationsChanged);
+    } catch (e) {
+      // Context might be unavailable during dispose
+    }
+
+    try {
+      final cloudSync = Provider.of<CloudSyncService>(context, listen: false);
+      cloudSync.settingsRevision.removeListener(_reloadSyncedSettings);
     } catch (e) {
       // Context might be unavailable during dispose
     }

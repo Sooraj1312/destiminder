@@ -6,6 +6,10 @@ import '../models/destination_todos.dart';
 
 class TodoService extends ChangeNotifier {
   Map<String, DestinationTodos> _destinationTodos = {};
+
+  VoidCallback? onLocalChange;
+
+  Map<String, DestinationTodos> get allTodos => _destinationTodos;
   
   // Get todos for a specific destination
   List<Todo> getTodosForDestination(String destinationId) {
@@ -125,6 +129,12 @@ class TodoService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> replaceAll(Map<String, DestinationTodos> todos) async {
+    _destinationTodos = Map<String, DestinationTodos>.from(todos);
+    await _saveTodos();
+    notifyListeners();
+  }
+
   Future<void> _saveTodos() async {
     final prefs = await SharedPreferences.getInstance();
     final Map<String, dynamic> jsonMap = {};
@@ -132,5 +142,6 @@ class TodoService extends ChangeNotifier {
       jsonMap[key] = value.toJson();
     });
     await prefs.setString('destination_todos', json.encode(jsonMap));
+    onLocalChange?.call();
   }
 }

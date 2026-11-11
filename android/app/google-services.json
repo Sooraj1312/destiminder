@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "100716377323",
+    "project_id": "destiminder",
+    "storage_bucket": "destiminder.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:100716377323:android:eac4634a8666474a497aae",
+        "android_client_info": {
+          "package_name": "com.sooraj.destiminder"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "100716377323-u4fvij3pbcc3vdclmvueufpr75i51nri.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sooraj.destiminder",
+            "certificate_hash": "800f583619afe1f3bee63ef6687fa9be469360f1"
+          }
+        },
+        {
+          "client_id": "100716377323-1sp99ktmhi7mq15k0ehdk88qa4pojahf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdS3RBx1VKTUa-PxpXJWKE9nmS25j9gW8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "100716377323-1sp99ktmhi7mq15k0ehdk88qa4pojahf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

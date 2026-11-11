@@ -6,6 +6,8 @@ import '../models/destination.dart';
 
 class HistoryService extends ChangeNotifier {
   List<ArrivalHistory> _history = [];
+
+  VoidCallback? onLocalChange;
   
   List<ArrivalHistory> get history => _history;
   
@@ -69,12 +71,20 @@ class HistoryService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> replaceAll(List<ArrivalHistory> history) async {
+    _history = List<ArrivalHistory>.from(history);
+    _history.sort((a, b) => b.arrivalTime.compareTo(a.arrivalTime));
+    await _saveHistory();
+    notifyListeners();
+  }
+
   Future<void> _saveHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final String encoded = json.encode(
       _history.map((h) => h.toJson()).toList()
     );
     await prefs.setString('arrival_history', encoded);
+    onLocalChange?.call();
   }
 
   // Statistics

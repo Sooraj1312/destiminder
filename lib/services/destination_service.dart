@@ -6,6 +6,8 @@ import '../models/destination.dart';
 class DestinationService extends ChangeNotifier {
   List<Destination> _destinations = [];
 
+  VoidCallback? onLocalChange;
+
   List<Destination> get destinations => _destinations;
   
   // NEW - get only active destinations
@@ -50,6 +52,12 @@ class DestinationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> replaceAll(List<Destination> destinations) async {
+    _destinations = List<Destination>.from(destinations);
+    await _saveDestinations();
+    notifyListeners();
+  }
+
   // NEW - toggle active status
   Future<void> toggleActive(String id) async {
     final index = _destinations.indexWhere((d) => d.id == id);
@@ -90,5 +98,6 @@ class DestinationService extends ChangeNotifier {
       _destinations.map((d) => d.toJson()).toList()
     );
     await prefs.setString('destinations', encoded);
+    onLocalChange?.call();
   }
 }
