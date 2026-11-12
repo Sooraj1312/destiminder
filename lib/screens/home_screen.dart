@@ -1115,21 +1115,48 @@ class _HomeScreenState extends State<HomeScreen>
             panelSnapping: true,
             parallaxEnabled: true,
             parallaxOffset: 0.4,
-            // Unlocked while reordering - panel stays fixed so cards drag freely
-            isDraggable: _destinationsLocked,
+            // Panel dragging is handled by the header handle below so it
+            // works in both locked and unlocked states without interfering
+            // with card reordering.
+            isDraggable: false,
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(28),
             ),
-            header: Container(
-              width: MediaQuery.of(context).size.width,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(2),
+            header: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: (details) {
+                if (!_panelController.isAttached) return;
+                final range =
+                    MediaQuery.of(context).size.height * 0.78 - 140;
+                final next = (_panelController.panelPosition -
+                        details.delta.dy / range)
+                    .clamp(0.0, 1.0)
+                    .toDouble();
+                _panelController.panelPosition = next;
+              },
+              onVerticalDragEnd: (details) {
+                if (!_panelController.isAttached) return;
+                final velocity = details.velocity.pixelsPerSecond.dy;
+                final position = _panelController.panelPosition;
+                final shouldOpen = velocity < -365 ||
+                    (velocity.abs() <= 365 && position > 0.5);
+                if (shouldOpen) {
+                  _panelController.open();
+                } else {
+                  _panelController.close();
+                }
+              },
+              child: Container(
+                width: MediaQuery.of(context).size.width,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
               ),
