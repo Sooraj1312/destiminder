@@ -981,16 +981,14 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.radar_rounded,
-                color: theme.colorScheme.primary,
-                size: 22,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/icon/logo.png',
+                width: 38,
+                height: 38,
+                fit: BoxFit.contain,
+                semanticLabel: 'DestiMinder logo',
               ),
             ),
             const SizedBox(width: 12),
